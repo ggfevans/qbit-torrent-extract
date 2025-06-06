@@ -5,15 +5,18 @@ from typing import Optional, List
 import zipfile
 import rarfile
 from tqdm import tqdm
+from .config import Config
 
 class ArchiveExtractor:
-    def __init__(self, preserve_archives: bool = True, log_level: int = logging.INFO):
+    def __init__(self, preserve_archives: bool = True, log_level: int = logging.INFO, config: Optional[Config] = None):
         """Initialize the archive extractor.
         
         Args:
             preserve_archives: If True, keep original archives after extraction
             log_level: Logging level to use
+            config: Configuration object
         """
+        self.config = config or Config()
         self.preserve_archives = preserve_archives
         self._setup_logging(log_level)
 
