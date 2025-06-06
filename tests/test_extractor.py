@@ -19,7 +19,10 @@ def temp_dir():
 @pytest.fixture
 def extractor():
     """Create an ArchiveExtractor instance."""
-    return ArchiveExtractor(preserve_archives=True)
+    from qbit_torrent_extract.logger import setup_logging
+    config = Config()
+    setup_logging(config)
+    return ArchiveExtractor(preserve_archives=True, config=config)
 
 def create_test_zip(directory: Path, filename: str = "test.zip", content: str = "test content") -> Path:
     """Create a test ZIP file."""
@@ -101,17 +104,21 @@ def test_extract_zip(extractor, temp_dir):
 
 def test_no_preserve_archives(temp_dir):
     """Test archive removal when preserve_archives is False."""
-    extractor = ArchiveExtractor(preserve_archives=False)
+    from qbit_torrent_extract.logger import setup_logging
+    config = Config()
+    setup_logging(config)
+    extractor = ArchiveExtractor(preserve_archives=False, config=config)
     
     # Create test ZIP
     zip_path = create_test_zip(temp_dir)
     
     # Extract
-    extractor.extract_all(temp_dir)
+    stats = extractor.extract_all(str(temp_dir))
     
     # Check results
     assert (temp_dir / "test.txt").exists()
     assert not (temp_dir / "test.zip").exists()  # should be removed
+    assert stats['successful'] == 1
 
 def test_empty_directory(extractor, temp_dir):
     """Test handling of directory with no archives."""
@@ -206,7 +213,10 @@ def test_mixed_archive_types(extractor, temp_dir):
 
 def test_corrupted_archive_handling(temp_dir):
     """Test handling of corrupted archives."""
-    extractor = ArchiveExtractor(preserve_archives=True)
+    from qbit_torrent_extract.logger import setup_logging
+    config = Config()
+    setup_logging(config)
+    extractor = ArchiveExtractor(preserve_archives=True, config=config)
     
     # Create corrupted archive
     corrupted_path = create_corrupted_zip(temp_dir)

@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from .extractor import ArchiveExtractor
 from .config import load_config
+from .logger import setup_logging, get_logger, cleanup_logging
 
 @click.command()
 @click.argument('directory', type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path))
@@ -13,9 +14,10 @@ from .config import load_config
 @click.option('--max-ratio', type=float, help='Maximum extraction ratio for zipbomb protection')
 @click.option('--max-depth', type=int, help='Maximum nested archive depth')
 @click.option('--log-dir', type=click.Path(), help='Directory for log files')
+@click.option('--torrent-name', type=str, help='Name of the torrent for per-torrent logging')
 @click.version_option(version='0.1.0')
 def main(directory: Path, preserve: bool, verbose: bool, config: str, 
-         max_ratio: float, max_depth: int, log_dir: str) -> None:
+         max_ratio: float, max_depth: int, log_dir: str, torrent_name: str) -> None:
     """Extract nested ZIP and RAR archives in the specified directory.
     
     This tool is designed to work with qBittorrent's "Run external program on torrent completion"
@@ -33,31 +35,58 @@ def main(directory: Path, preserve: bool, verbose: bool, config: str,
         log_dir=log_dir
     )
     
-    # Set up logging
-    log_level = getattr(logging, config_obj.log_level)
+    # Setup enhanced logging system
+    logging_manager = setup_logging(config_obj)
+    logger = get_logger("main", torrent_name)
     
     try:
-        # Initialize extractor with configuration
+        logger.info(f"Starting qbit-torrent-extract v0.1.0")
+        logger.info(f"Processing directory: {directory}")
+        if torrent_name:
+            logger.info(f"Torrent name: {torrent_name}")
+        
+        # Initialize extractor with configuration and torrent name
         extractor = ArchiveExtractor(
             preserve_archives=config_obj.preserve_originals,
-            log_level=log_level,
-            config=config_obj
+            config=config_obj,
+            torrent_name=torrent_name
         )
         
         # List files before extraction if verbose
         if verbose:
+            archives = extractor.get_archive_files(str(directory))
+            logger.info(f"Found {len(archives)} archives to process")
             click.echo("Found archives:")
-            for archive in extractor.get_archive_files(directory):
+            for archive in archives:
                 click.echo(f"  {archive}")
         
         # Perform extraction
-        extractor.extract_all(directory)
+        stats = extractor.extract_all(str(directory))
+        
+        # Log extraction results
+        logger.info(f"Extraction completed - Processed: {stats['total_processed']}, "
+                   f"Successful: {stats['successful']}, Failed: {stats['failed']}, "
+                   f"Skipped: {stats['skipped']}")
+        
+        if stats['errors']:
+            logger.warning(f"Extraction completed with {len(stats['errors'])} errors")
+            for error in stats['errors']:
+                logger.error(f"  {error}")
+        
+        # Show logging statistics if verbose
+        if verbose:
+            log_stats = logging_manager.get_log_stats()
+            logger.debug(f"Logging stats: {log_stats}")
         
         click.echo("Extraction completed successfully!")
         
     except Exception as e:
+        logger.error(f"Unexpected error: {e}")
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
+    finally:
+        # Clean up logging system
+        cleanup_logging()
 
 if __name__ == '__main__':
     main()
