@@ -1,10 +1,10 @@
 # Prompt Plan for qbit-torrent-extract Development
 
 ## Progress Summary
-**Overall Completion**: 4/11 prompts complete (36%)
-- ✅ Complete: 4
+**Overall Completion**: 5/11 prompts complete (45%)
+- ✅ Complete: 5
 - 🚧 In Progress: 0
-- ⚠️ Partial: 4
+- ⚠️ Partial: 3
 - ❌ Not Started: 3
 
 ## Completion Checklist
@@ -18,7 +18,7 @@
 - [x] Prompt 4: Extraction System
 
 ### Stage 3: Logging and Monitoring
-- [ ] Prompt 5: Logging System ⚠️
+- [x] Prompt 5: Logging System
 - [ ] Prompt 6: Statistics Tracking
 
 ### Stage 4: Integration and Testing
@@ -152,7 +152,7 @@ Include error handling and progress indicators.
 
 ## Stage 3: Logging and Monitoring
 
-### Prompt 5: Logging System ⚠️ PARTIAL
+### Prompt 5: Logging System ✅ COMPLETED
 ```
 Implement the logging system with:
 1. Multiple log levels (normal/verbose)
@@ -161,7 +161,18 @@ Implement the logging system with:
 4. Structured log format
 Show the implementation and example outputs.
 ```
-**Status**: Basic logging exists, missing per-torrent files and rotation
+
+**Subtasks:**
+- [x] Create enhanced logging module with structured formatting
+- [x] Implement per-torrent log files with filename sanitization
+- [x] Add log rotation with configurable size and count limits  
+- [x] Create contextual logging with archive paths and torrent info
+- [x] Integrate with extractor and main CLI
+- [x] Add normal/verbose mode support
+- [x] Implement console and file logging handlers
+- [x] Write comprehensive test suite (24 tests)
+- [x] Add torrent-name CLI option
+- [x] Provide logging statistics and management
 
 ### Prompt 6: Statistics Tracking ❌ NOT STARTED
 ```
