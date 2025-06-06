@@ -292,7 +292,7 @@ class ArchiveValidator:
                 file_count = len(names)
                 
                 # For 7z, we need to check the archive info differently
-                for name, info in szf.list():
+                for info in szf.list():
                     total_size += info.uncompressed
                     compressed_size += info.compressed
                 
