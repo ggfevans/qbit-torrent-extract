@@ -1,11 +1,11 @@
 # Prompt Plan for qbit-torrent-extract Development
 
 ## Progress Summary
-**Overall Completion**: 5/11 prompts complete (45%)
-- ✅ Complete: 5
+**Overall Completion**: 6/11 prompts complete (55%)
+- ✅ Complete: 6
 - 🚧 In Progress: 0
 - ⚠️ Partial: 3
-- ❌ Not Started: 3
+- ❌ Not Started: 2
 
 ## Completion Checklist
 
@@ -19,7 +19,7 @@
 
 ### Stage 3: Logging and Monitoring
 - [x] Prompt 5: Logging System
-- [ ] Prompt 6: Statistics Tracking
+- [x] Prompt 6: Statistics Tracking
 
 ### Stage 4: Integration and Testing
 - [ ] Prompt 7: CLI Implementation ⚠️
@@ -174,7 +174,7 @@ Show the implementation and example outputs.
 - [x] Add torrent-name CLI option
 - [x] Provide logging statistics and management
 
-### Prompt 6: Statistics Tracking ❌ NOT STARTED
+### Prompt 6: Statistics Tracking ✅ COMPLETED
 ```
 Create the statistics tracking system that:
 1. Records success/failure counts
@@ -182,6 +182,18 @@ Create the statistics tracking system that:
 3. Maintains error type statistics
 4. Implements atomic writes for stats updates
 ```
+
+**Subtasks:**
+- [x] Create comprehensive StatisticsManager with detailed tracking
+- [x] Implement persistent JSON storage with atomic writes
+- [x] Add error type categorization system (8 error types)
+- [x] Track performance metrics (extraction time, throughput)
+- [x] Support aggregated statistics across multiple runs
+- [x] Integrate with CLI (--stats-file, --show-stats, --export-stats)
+- [x] Add detailed per-archive tracking in extractor
+- [x] Maintain backward compatibility with legacy stats
+- [x] Write comprehensive test suite (31 tests)
+- [x] Support statistics export and data management
 
 ## Stage 4: Integration and Testing
 
