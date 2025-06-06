@@ -1,6 +1,7 @@
 import logging
 import os
 import tarfile
+import time
 from pathlib import Path
 from typing import Optional, List, Dict, Set, Tuple
 import zipfile
@@ -10,6 +11,7 @@ from tqdm import tqdm
 from .config import Config
 from .validator import ArchiveValidator, ValidationResult
 from .logger import get_logger, log_with_context
+from .statistics import get_statistics_manager, categorize_error, ErrorType
 
 class ArchiveExtractor:
     def __init__(self, preserve_archives: bool = True, log_level: int = logging.INFO, 
@@ -27,6 +29,8 @@ class ArchiveExtractor:
         self.torrent_name = torrent_name
         self.validator = ArchiveValidator(config)
         self.extracted_archives: Set[Path] = set()
+        
+        # Legacy stats for backward compatibility
         self.extraction_stats = {
             'total_processed': 0,
             'successful': 0,
@@ -34,6 +38,11 @@ class ArchiveExtractor:
             'skipped': 0,
             'errors': []
         }
+        
+        # Enhanced statistics tracking
+        self.stats_manager = get_statistics_manager(config)
+        self.current_run_id: Optional[str] = None
+        
         # Use the new logging system
         self.logger = get_logger("extractor", torrent_name)
 
@@ -47,7 +56,10 @@ class ArchiveExtractor:
         self.logger.info(f"Starting extraction in directory: {directory}")
         directory_path = Path(directory)
         
-        # Reset stats for this run
+        # Start enhanced statistics tracking
+        self.current_run_id = self.stats_manager.start_extraction_run(directory, self.torrent_name)
+        
+        # Reset legacy stats for this run
         self.extraction_stats = {
             'total_processed': 0,
             'successful': 0,
@@ -76,7 +88,18 @@ class ArchiveExtractor:
             for archive_path in tqdm(new_archives, desc=f"Iteration {iteration + 1}"):
                 self._extract_single_archive(archive_path)
                 
+        # Finish enhanced statistics tracking
+        run_stats = self.stats_manager.finish_extraction_run()
+        
         self.logger.info(f"Extraction complete. Stats: {self.extraction_stats}")
+        
+        # Add enhanced stats to legacy stats for backward compatibility
+        if run_stats:
+            self.extraction_stats['run_id'] = run_stats.run_id
+            self.extraction_stats['duration_seconds'] = run_stats.duration_seconds
+            self.extraction_stats['archives_by_type'] = run_stats.archives_by_type
+            self.extraction_stats['errors_by_type'] = run_stats.errors_by_type
+        
         return self.extraction_stats
 
     def _find_all_archives(self, directory: Path) -> List[Path]:
@@ -92,6 +115,13 @@ class ArchiveExtractor:
                 archives.extend(directory.rglob(f"*{ext}"))
         return sorted(set(archives))
 
+    def _get_archive_size(self, archive_path: Path) -> int:
+        """Get the size of an archive file in bytes."""
+        try:
+            return archive_path.stat().st_size
+        except (OSError, AttributeError):
+            return 0
+    
     def _extract_single_archive(self, archive_path: Path) -> bool:
         """Extract a single archive with validation and error handling.
         
@@ -102,11 +132,14 @@ class ArchiveExtractor:
             True if extraction was successful, False otherwise
         """
         self.extraction_stats['total_processed'] += 1
+        archive_size = self._get_archive_size(archive_path)
+        start_time = time.time()
         
         # Skip if already processed
         if archive_path in self.extracted_archives:
             self.logger.debug(f"Skipping already processed archive: {archive_path}")
             self.extraction_stats['skipped'] += 1
+            self.stats_manager.record_archive_skipped(archive_path, "already_processed")
             return True
             
         # Validate archive before extraction
@@ -121,6 +154,19 @@ class ArchiveExtractor:
             self.extraction_stats['failed'] += 1
             self.extraction_stats['errors'].append(f"{archive_path}: {error_msg}")
             self.extracted_archives.add(archive_path)  # Mark as processed to avoid retry
+            
+            # Record detailed statistics
+            extraction_time = time.time() - start_time
+            error_type = categorize_error(validation.error_message or "validation_failed")
+            self.stats_manager.record_archive_processed(
+                archive_path=archive_path,
+                archive_type=validation.archive_type or "unknown",
+                success=False,
+                size_bytes=archive_size,
+                extraction_time=extraction_time,
+                error_type=error_type,
+                error_message=validation.error_message
+            )
             return False
             
         # Check nested depth
@@ -132,6 +178,19 @@ class ArchiveExtractor:
             self.extraction_stats['failed'] += 1
             self.extraction_stats['errors'].append(f"{archive_path}: {error_msg}")
             self.extracted_archives.add(archive_path)
+            
+            # Record detailed statistics
+            extraction_time = time.time() - start_time
+            self.stats_manager.record_archive_processed(
+                archive_path=archive_path,
+                archive_type=validation.archive_type,
+                success=False,
+                size_bytes=archive_size,
+                extraction_time=extraction_time,
+                error_type=ErrorType.NESTED_DEPTH_EXCEEDED,
+                error_message=error_msg,
+                nested_depth=depth
+            )
             return False
             
         # Extract based on archive type
@@ -155,9 +214,24 @@ class ArchiveExtractor:
                 self.logger.error(error_msg)
                 self.extraction_stats['errors'].append(error_msg)
                 
+            # Record detailed statistics
+            extraction_time = time.time() - start_time
+            
             if success:
                 self.extraction_stats['successful'] += 1
                 self.extracted_archives.add(archive_path)
+                
+                # Record successful extraction
+                self.stats_manager.record_archive_processed(
+                    archive_path=archive_path,
+                    archive_type=validation.archive_type,
+                    success=True,
+                    size_bytes=archive_size,
+                    extracted_size_bytes=validation.total_size,
+                    compression_ratio=validation.extraction_ratio,
+                    extraction_time=extraction_time,
+                    nested_depth=depth
+                )
                 
                 # Remove original if requested
                 if not self.preserve_archives:
@@ -168,6 +242,18 @@ class ArchiveExtractor:
                 self.extraction_stats['failed'] += 1
                 self.extracted_archives.add(archive_path)  # Mark as processed
                 
+                # Record failed extraction (specific error will be recorded in individual methods)
+                self.stats_manager.record_archive_processed(
+                    archive_path=archive_path,
+                    archive_type=validation.archive_type,
+                    success=False,
+                    size_bytes=archive_size,
+                    extraction_time=extraction_time,
+                    error_type=ErrorType.EXTRACTION_ERROR,
+                    error_message="Extraction method failed",
+                    nested_depth=depth
+                )
+                
             return success
             
         except Exception as e:
@@ -177,6 +263,20 @@ class ArchiveExtractor:
             self.extraction_stats['failed'] += 1
             self.extraction_stats['errors'].append(f"{archive_path}: {error_msg}")
             self.extracted_archives.add(archive_path)
+            
+            # Record detailed statistics
+            extraction_time = time.time() - start_time
+            error_type = categorize_error(str(e), type(e).__name__)
+            self.stats_manager.record_archive_processed(
+                archive_path=archive_path,
+                archive_type=validation.archive_type if 'validation' in locals() else "unknown",
+                success=False,
+                size_bytes=archive_size,
+                extraction_time=extraction_time,
+                error_type=error_type,
+                error_message=str(e),
+                nested_depth=depth if 'depth' in locals() else 0
+            )
             return False
 
     def _extract_zip(self, archive_path: Path) -> bool:
@@ -273,4 +373,20 @@ class ArchiveExtractor:
     def get_extraction_stats(self) -> Dict[str, any]:
         """Get current extraction statistics."""
         return self.extraction_stats.copy()
+    
+    def get_enhanced_stats(self) -> Optional[Dict[str, any]]:
+        """Get enhanced statistics from the current run.
+        
+        Returns:
+            Enhanced statistics dictionary or None if no run is active
+        """
+        return self.stats_manager.get_current_run_stats()
+    
+    def get_aggregated_stats(self):
+        """Get aggregated statistics across all runs."""
+        return self.stats_manager.get_aggregated_stats()
+    
+    def get_recent_runs(self, limit: int = 10):
+        """Get recent extraction runs."""
+        return self.stats_manager.get_recent_runs(limit)
 
