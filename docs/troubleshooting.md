@@ -2,6 +2,10 @@
 
 This comprehensive guide helps you diagnose and resolve common issues with qbit-torrent-extract.
 
+> **The Universal \*arr App Problem™**: *"No files found are eligible for import in /data/torrents/download/readarr/Chuck.Palahniuk.-.Fight.Club.2011.Retail.EPUB.eBook-BitBook"*
+> 
+> If you're here because Readarr/Sonarr/Radarr/Lidarr refuses to see the actual files inside your torrents, you're in the right place. We've all been there, staring at that error message, knowing full well the EPUB is sitting right there... just wrapped in a ZIP file like a digital matryoshka doll.
+
 ## Table of Contents
 
 - [Quick Diagnostic Steps](#quick-diagnostic-steps)
@@ -375,6 +379,50 @@ qbit-torrent-extract /path --max-depth 5
 unzip archive.zip
 ls -la  # Look for more archives inside
 ```
+
+## The \*arr Apps "No Files Found" Solution
+
+### Why Your \*arr Apps Can't See Your Files
+
+You know the drill:
+1. Torrent downloads successfully ✅
+2. qBittorrent shows it's complete ✅
+3. Files are clearly there ✅
+4. Readarr/Sonarr: "No files found are eligible for import" ❌
+
+**The Problem**: Your files are trapped inside archives, and \*arr apps don't speak ZIP.
+
+**The Solution**: qbit-torrent-extract automatically unpacks those archives so your \*arr apps can finally see what's inside.
+
+### Common Archive Patterns That Break \*arr Apps
+
+```
+Chuck.Palahniuk.-.Fight.Club.2011.Retail.EPUB.eBook-BitBook/
+└── Chuck.Palahniuk.-.Fight.Club.2011.Retail.EPUB.eBook-BitBook.zip
+    └── BitBook.nfo
+    └── Fight Club - Chuck Palahniuk.epub  <-- What Readarr actually wants
+```
+
+### Quick Fix for Existing Downloads
+
+If you already have downloads that \*arr apps can't see:
+
+```bash
+# Extract all archives in your download directory
+qbit-torrent-extract /data/torrents/download/readarr/ --verbose
+
+# Watch the magic happen
+# Readarr: "1 book imported" 🎉
+```
+
+### Automatic Fix for Future Downloads
+
+Configure qBittorrent to automatically extract on completion:
+```
+/path/to/python -m qbit_torrent_extract "%F" --torrent-name "%N"
+```
+
+Now your \*arr apps will never miss another file hidden in an archive!
 
 ## qBittorrent Integration Problems
 

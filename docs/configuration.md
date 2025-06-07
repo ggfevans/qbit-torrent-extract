@@ -506,6 +506,23 @@ qBittorrent command:
 
 ### Use Case Specific Configurations
 
+#### The "Make Readarr Happy" Configuration
+```json
+{
+  "preserve_originals": true,
+  "max_extraction_ratio": 100.0,
+  "max_nested_depth": 3,
+  "skip_on_error": true,
+  "log_level": "INFO",
+  "log_dir": "~/qbit-logs",
+  "stats_file": "~/readarr-extraction-wins.json",
+  "progress_indicators": false,
+  "supported_extensions": [".zip", ".rar", ".7z"]
+}
+```
+
+Perfect for those BitBook releases that hide EPUBs inside ZIPs inside folders with names longer than a Tolstoy novel.
+
 #### High Security Environment
 ```json
 {

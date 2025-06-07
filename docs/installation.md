@@ -70,7 +70,7 @@ cd qbit-torrent-extract
 pip install .
 ```
 
-### For qBittorrent Integration
+### For qBittorrent Integration (aka "The Readarr Whisperer")
 
 ```bash
 # Install in a dedicated virtual environment
@@ -81,6 +81,8 @@ pip install git+https://github.com/yourusername/qbit-torrent-extract.git
 # Note the installation path for qBittorrent configuration
 which qbit-torrent-extract
 ```
+
+🎉 **Pro tip**: After installation, those "No files found are eligible for import" errors will become a distant memory. Your \*arr apps will finally discover all those EPUBs, CBRs, and other files that release groups love to wrap in multiple layers of archives.
 
 ## Platform-Specific Instructions
 

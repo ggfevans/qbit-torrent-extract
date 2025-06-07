@@ -2,14 +2,19 @@
 
 An automated solution for extracting nested archives (zip/rar) from completed qBittorrent downloads.
 
+> *"No files found are eligible for import"* - Every Readarr user, probably
+
+Finally, a tool that ensures your \*arr apps actually find the files hidden inside those pesky nested archives!
+
 ## Features
 
 - Automatically extracts ZIP files from completed torrent downloads
-- Handles nested RAR archives within ZIP files
+- Handles nested RAR archives within ZIP files (because BitBook loves their archive-ception)
 - Integrates with qBittorrent's "Run external program on torrent completion" feature
-- Comprehensive logging
-- Preserves original archives
-- Error handling and reporting
+- Comprehensive logging (so you know exactly why Readarr is happy now)
+- Preserves original archives (keep seeding, friends!)
+- Error handling and reporting (no more silent failures)
+- Makes your \*arr apps actually see those EPUB files buried in `Chuck.Palahniuk.-.Fight.Club.2011.Retail.EPUB.eBook-BitBook.zip`
 
 ## Installation
 
