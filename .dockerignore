@@ -1,0 +1,63 @@
+# Git
+.git/
+.gitignore
+.github/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv/
+.mypy_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation source (we only need compiled docs)
+docs/
+*.md
+!README.md
+!CHANGELOG.md
+
+# Tests (not needed in production image)
+tests/
+pytest.ini
+.coveragerc
+
+# Development files
+requirements-dev.txt
+.pre-commit-config.yaml
+Makefile
+tox.ini
+
+# Local configuration
+config/
+logs/
+stats/
+*.log
+*.json
+!config.example.json
+
+# Archives (for testing)
+*.zip
+*.rar
+*.7z
+*.tar.gz
+*.tgz

@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  qbit-torrent-extract:
+    build: .
+    image: qbit-torrent-extract:latest
+    container_name: qbit-torrent-extract
+    restart: unless-stopped
+    
+    # Run extraction on a schedule (every 5 minutes)
+    command: |
+      sh -c 'while true; do
+        echo "Running extraction at $$(date)"
+        python -m qbit_torrent_extract /data --config /config/config.json --show-stats
+        echo "Sleeping for 5 minutes..."
+        sleep 300
+      done'
+    
+    volumes:
+      # Configuration directory
+      - ./config:/config
+      
+      # Logs directory
+      - ./logs:/logs
+      
+      # Data directory (mount your download directory here)
+      - ${DOWNLOAD_DIR:-/path/to/downloads}:/data
+      
+      # Optional: Statistics file
+      - ./stats:/stats
+    
+    environment:
+      # Override log level if needed
+      - QBIT_EXTRACT_LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # Set timezone
+      - TZ=${TZ:-UTC}
+      
+      # Python settings
+      - PYTHONUNBUFFERED=1
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Optional: Run alongside qBittorrent
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-UTC}
+      - WEBUI_PORT=8080
+    volumes:
+      - ./qbittorrent/config:/config
+      - ${DOWNLOAD_DIR:-/path/to/downloads}:/downloads
+    ports:
+      - 8080:8080
+      - 6881:6881
+      - 6881:6881/udp
+    restart: unless-stopped
+    
+    # Configure to use qbit-torrent-extract
+    # In qBittorrent settings, set external program to:
+    # docker exec qbit-torrent-extract python -m qbit_torrent_extract "/data/%N" --torrent-name "%N"
+
+# Networks
+networks:
+  default:
+    name: media-network
+    external: false
+
+# Example .env file:
+# DOWNLOAD_DIR=/media/downloads
+# LOG_LEVEL=INFO
+# TZ=America/New_York
