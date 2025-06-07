@@ -258,19 +258,137 @@ Consider setting up monitoring for:
 - Log file sizes and rotation
 - Unusual extraction patterns or errors
 
+## Documentation
+
+Comprehensive documentation is available in the `docs/` directory:
+
+- **[Installation Guide](docs/installation.md)** - Detailed installation instructions for all platforms
+- **[Configuration Reference](docs/configuration.md)** - Complete configuration options and examples  
+- **[API Documentation](docs/api.md)** - Full API reference for developers
+- **[Troubleshooting Guide](docs/troubleshooting.md)** - Common issues and solutions
+
+### Quick Links
+
+- [Platform-specific installation](docs/installation.md#platform-specific-instructions)
+- [qBittorrent integration setup](docs/installation.md#qbittorrent-integration)
+- [Configuration file format](docs/configuration.md#configuration-file-format)
+- [Security settings](docs/configuration.md#security-settings)
+- [Performance optimization](docs/troubleshooting.md#performance-issues)
+- [Common errors and solutions](docs/troubleshooting.md#quick-diagnostic-steps)
+
 ## Development
 
+### Setting Up Development Environment
+
 ```bash
+# Clone repository
+git clone https://github.com/yourusername/qbit-torrent-extract.git
+cd qbit-torrent-extract
+
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
 # Install development dependencies
 pip install -e ".[dev]"
+```
 
-# Run tests
+### Running Tests
+
+```bash
+# Run all tests
 pytest
 
 # Run with coverage
-pytest --cov=src
+pytest --cov=src --cov-report=html
+
+# Run specific test categories
+pytest tests/test_security.py  # Security tests
+pytest tests/test_performance.py -m performance  # Performance tests
+pytest tests/test_integration.py  # Integration tests
+
+# Run tests with verbose output
+pytest -v --tb=short
 ```
+
+### Code Quality Tools
+
+```bash
+# Format code
+black src/ tests/
+
+# Lint code
+flake8 src/ tests/
+
+# Type checking
+mypy src/
+
+# Run all quality checks
+black --check src/ tests/ && flake8 src/ tests/ && mypy src/
+```
+
+### Project Structure
+
+```
+qbit-torrent-extract/
+├── src/qbit_torrent_extract/     # Main package
+│   ├── __init__.py
+│   ├── main.py                   # CLI entry point
+│   ├── config.py                 # Configuration management
+│   ├── extractor.py              # Archive extraction logic
+│   ├── validator.py              # Archive validation
+│   ├── logger.py                 # Logging system
+│   └── statistics.py             # Statistics tracking
+├── tests/                        # Test suite (148 tests)
+│   ├── test_main.py             # CLI tests
+│   ├── test_config.py           # Configuration tests
+│   ├── test_extractor.py        # Extraction tests
+│   ├── test_validator.py        # Validation tests
+│   ├── test_logger.py           # Logging tests
+│   ├── test_statistics.py       # Statistics tests
+│   ├── test_security.py         # Security tests
+│   ├── test_performance.py      # Performance tests
+│   └── test_integration.py      # Integration tests
+├── docs/                        # Documentation
+│   ├── installation.md         # Installation guide
+│   ├── configuration.md        # Configuration reference
+│   ├── api.md                  # API documentation
+│   └── troubleshooting.md      # Troubleshooting guide
+├── setup.py                    # Package configuration
+├── requirements.txt            # Dependencies
+└── README.md                   # This file
+```
+
+### Contributing
+
+1. **Fork the repository** and create a feature branch
+2. **Install development dependencies**: `pip install -e ".[dev]"`
+3. **Write tests** for new functionality
+4. **Run the test suite**: `pytest`
+5. **Check code quality**: `black --check . && flake8 . && mypy src/`
+6. **Update documentation** if needed
+7. **Submit a pull request** with a clear description
+
+### Testing Guidelines
+
+- **Unit tests**: Test individual components in isolation
+- **Integration tests**: Test component interactions and workflows
+- **Security tests**: Test security features and edge cases
+- **Performance tests**: Benchmark and regression testing
+- **All tests should pass**: Never commit failing tests
+- **Aim for high coverage**: Target >90% code coverage
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Support
+
+- **Documentation**: See [docs/](docs/) directory
+- **Issues**: Report bugs on [GitHub Issues](https://github.com/yourusername/qbit-torrent-extract/issues)
+- **Discussions**: Join discussions on [GitHub Discussions](https://github.com/yourusername/qbit-torrent-extract/discussions)
+- **Security**: Report security issues privately via email
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
