@@ -20,7 +20,7 @@ Finally, a tool that ensures your \*arr apps actually find the files hidden insi
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/qbit-torrent-extract.git
+git clone https://github.com/ggfevans/qbit-torrent-extract.git
 cd qbit-torrent-extract
 
 # Create and activate virtual environment
@@ -390,8 +390,8 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## Support
 
 - **Documentation**: See [docs/](docs/) directory
-- **Issues**: Report bugs on [GitHub Issues](https://github.com/yourusername/qbit-torrent-extract/issues)
-- **Discussions**: Join discussions on [GitHub Discussions](https://github.com/yourusername/qbit-torrent-extract/discussions)
+- **Issues**: Report bugs on [GitHub Issues](https://github.com/ggfevans/qbit-torrent-extract/issues)
+- **Discussions**: Join discussions on [GitHub Discussions](https://github.com/ggfevans/qbit-torrent-extract/discussions)
 - **Security**: Report security issues privately via email
 
 ## Changelog
