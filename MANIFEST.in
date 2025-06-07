@@ -1,0 +1,40 @@
+# Include documentation
+include README.md
+include LICENSE
+include CHANGELOG.md
+include requirements.txt
+include requirements-dev.txt
+
+# Include all documentation
+recursive-include docs *.md *.rst *.txt
+
+# Include test files
+recursive-include tests *.py
+include pytest.ini
+include .coveragerc
+
+# Include type information
+include src/qbit_torrent_extract/py.typed
+
+# Include configuration examples
+include config.example.json
+
+# Exclude unnecessary files
+global-exclude __pycache__
+global-exclude *.py[co]
+global-exclude .DS_Store
+global-exclude .gitignore
+global-exclude .git
+global-exclude .pytest_cache
+global-exclude .mypy_cache
+global-exclude .coverage
+global-exclude *.log
+global-exclude *.swp
+global-exclude *~
+
+# Exclude build artifacts
+prune build/
+prune dist/
+prune *.egg-info/
+prune venv/
+prune .tox/

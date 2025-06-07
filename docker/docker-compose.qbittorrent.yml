@@ -1,0 +1,81 @@
+version: '3.8'
+
+# This docker-compose shows how to use qBittorrent with built-in extraction
+# Perfect for use with *arr apps!
+
+services:
+  qbittorrent-with-extraction:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.qbittorrent
+    image: qbittorrent-qte:latest
+    container_name: qbittorrent
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-UTC}
+      - WEBUI_PORT=8080
+    volumes:
+      # Configuration
+      - ./config:/config
+      
+      # Downloads directory (where your *arr apps look for files)
+      - ${DOWNLOAD_DIR:-/media/downloads}:/downloads
+      
+      # Optional: Separate directory for completed torrents
+      - ${COMPLETE_DIR:-/media/downloads/complete}:/downloads/complete
+    ports:
+      - 8080:8080      # WebUI
+      - 6881:6881      # Torrent port
+      - 6881:6881/udp  # Torrent port UDP
+    restart: unless-stopped
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# Configuration Instructions:
+# 1. After container starts, open qBittorrent WebUI at http://localhost:8080
+# 2. Go to Settings -> Downloads
+# 3. Enable "Run external program on torrent completion"
+# 4. Set command to: /scripts/extract.sh "%F" "%N" "%L" "%I"
+# 5. Save settings
+#
+# That's it! Archives will now be automatically extracted when torrents complete.
+# Your *arr apps will finally see those files!
+
+# Advanced Configuration:
+# Edit /config/qte-config.json to customize extraction behavior:
+# - max_extraction_ratio: Adjust zipbomb protection (default: 100.0)
+# - max_nested_depth: How deep to extract nested archives (default: 3)
+# - preserve_originals: Keep original archives for seeding (default: true)
+
+# Integration with *arr stack:
+networks:
+  default:
+    external:
+      name: arr-network  # Use the same network as your *arr apps
+
+# Example with full *arr stack:
+# services:
+#   qbittorrent-with-extraction:
+#     # ... config above ...
+#   
+#   readarr:
+#     image: lscr.io/linuxserver/readarr:develop
+#     container_name: readarr
+#     environment:
+#       - PUID=1000
+#       - PGID=1000
+#       - TZ=${TZ:-UTC}
+#     volumes:
+#       - ./readarr/config:/config
+#       - ${DOWNLOAD_DIR:-/media/downloads}:/downloads
+#       - /media/books:/books
+#     ports:
+#       - 8787:8787
+#     restart: unless-stopped
