@@ -172,18 +172,3 @@ exclude_lines = [
     "raise NotImplementedError",
     "if TYPE_CHECKING:",
 ]
-=======
-[project]
-name = "qbit-torrent-extract"
-version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
-requires-python = ">=3.12"
-dependencies = []
-
-[dependency-groups]
-dev = [
-    "pre-commit>=4.2.0",
-    "pytest>=8.4.0",
-    "ruff>=0.11.13",
-]
