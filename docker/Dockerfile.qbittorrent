@@ -1,82 +1,26 @@
-# Enhanced qBittorrent image with qbit-torrent-extract built-in
-# This extends the popular LinuxServer.io qBittorrent image
-
+# qBittorrent with qbit-torrent-extract
 FROM lscr.io/linuxserver/qbittorrent:latest
 
 # Install Python and extraction tools
-RUN apk add --no-cache \
-    python3 \
-    py3-pip \
-    unrar \
-    p7zip \
-    && rm -rf /var/cache/apk/*
+RUN apk add --no-cache python3 py3-pip unrar p7zip
 
 # Install qbit-torrent-extract
-COPY requirements.txt /tmp/
-COPY setup.py /tmp/
-COPY pyproject.toml /tmp/
-COPY README.md /tmp/
+COPY pyproject.toml README.md /tmp/
 COPY src/ /tmp/src/
-
 WORKDIR /tmp
-RUN pip3 install --no-cache-dir . && \
-    rm -rf /tmp/*
+RUN pip3 install --no-cache-dir . && rm -rf /tmp/*
 
-# Create extraction script that qBittorrent can call
-RUN echo '#!/bin/sh\n\
-# qBittorrent post-completion script\n\
-# Usage: /scripts/extract.sh "%F" "%N" "%L" "%I"\n\
-\n\
-TORRENT_PATH="$1"\n\
-TORRENT_NAME="$2"\n\
-CATEGORY="$3"\n\
-HASH="$4"\n\
-\n\
-# Log the extraction attempt\n\
-echo "[$(date)] Extracting archives for: $TORRENT_NAME" >> /config/extraction.log\n\
-\n\
-# Run extraction\n\
-python3 -m qbit_torrent_extract "$TORRENT_PATH" \\\n\
-    --torrent-name "$TORRENT_NAME" \\\n\
-    --config /config/qte-config.json \\\n\
-    --log-dir /config/qte-logs \\\n\
-    --stats-file /config/qte-stats.json \\\n\
-    >> /config/extraction.log 2>&1\n\
-\n\
-# Check if successful\n\
-if [ $? -eq 0 ]; then\n\
-    echo "[$(date)] Successfully extracted: $TORRENT_NAME" >> /config/extraction.log\n\
-    # Optional: Send notification to *arr apps to rescan\n\
-    # curl -X POST "http://readarr:7878/api/v1/command" ...\n\
-else\n\
-    echo "[$(date)] Extraction failed for: $TORRENT_NAME" >> /config/extraction.log\n\
-fi\n\
+# Create extraction script
+RUN echo '#!/bin/sh
+python3 -m qbit_torrent_extract "$1" --config /config/qte-config.json >> /config/extraction.log 2>&1
 ' > /scripts/extract.sh && chmod +x /scripts/extract.sh
 
-# Create default configuration for qbit-torrent-extract
-RUN echo '{\n\
-    "preserve_originals": true,\n\
-    "max_extraction_ratio": 100.0,\n\
-    "max_nested_depth": 3,\n\
-    "log_level": "INFO",\n\
-    "skip_on_error": true,\n\
-    "progress_indicators": false\n\
-}' > /defaults/qte-config.json
+# Default config
+RUN echo '{"preserve_originals": true, "max_extraction_ratio": 100.0, "max_nested_depth": 3}' > /defaults/qte-config.json
 
-# Add initialization script to set up on first run
-RUN echo '#!/bin/sh\n\
-# Copy default config if not exists\n\
-if [ ! -f /config/qte-config.json ]; then\n\
-    cp /defaults/qte-config.json /config/\n\
-    echo "Created default qbit-torrent-extract config"\n\
-fi\n\
-\n\
-# Create directories\n\
-mkdir -p /config/qte-logs\n\
-chown -R abc:abc /config/qte-logs /config/qte-*.json\n\
+# Init script
+RUN echo '#!/bin/sh
+[ ! -f /config/qte-config.json ] && cp /defaults/qte-config.json /config/
 ' > /etc/cont-init.d/95-qte-init && chmod +x /etc/cont-init.d/95-qte-init
 
-# Labels
-LABEL maintainer="your.email@example.com" \
-      description="qBittorrent with integrated archive extraction - Never see 'No files found' in Readarr again!" \
-      qte.version="0.1.0"
+LABEL description="qBittorrent with archive extraction" qte.version="0.2.0"

@@ -5,7 +5,8 @@ import pytest
 import tempfile
 import os
 from pathlib import Path
-from qbit_torrent_extract.config import Config, load_config, get_default_config
+
+from qbit_torrent_extract.config import Config, load_config
 
 
 class TestConfig:
@@ -13,14 +14,13 @@ class TestConfig:
 
     def test_default_config(self):
         """Test default configuration values."""
-        config = get_default_config()
+        config = Config()
 
         assert config.max_extraction_ratio == 100.0
         assert config.max_nested_depth == 3
         assert config.preserve_originals is True
         assert config.log_level == "INFO"
-        assert ".zip" in config.supported_extensions
-        assert ".rar" in config.supported_extensions
+        assert config.progress_indicators is True
 
     def test_config_validation(self):
         """Test configuration validation."""
@@ -35,22 +35,6 @@ class TestConfig:
         # Invalid log level
         with pytest.raises(ValueError, match="Invalid log level"):
             Config(log_level="INVALID")
-
-    def test_config_from_dict(self):
-        """Test creating config from dictionary."""
-        data = {
-            "max_extraction_ratio": 200.0,
-            "max_nested_depth": 5,
-            "log_level": "DEBUG",
-            "preserve_originals": False,
-        }
-
-        config = Config.from_dict(data)
-
-        assert config.max_extraction_ratio == 200.0
-        assert config.max_nested_depth == 5
-        assert config.log_level == "DEBUG"
-        assert config.preserve_originals is False
 
     def test_config_from_file(self):
         """Test loading config from JSON file."""
@@ -73,41 +57,24 @@ class TestConfig:
         finally:
             os.unlink(temp_file)
 
-    def test_config_save(self):
-        """Test saving config to file."""
-        config = Config(
-            max_extraction_ratio=75.0, max_nested_depth=2, log_level="ERROR"
-        )
+    def test_config_from_file_ignores_unknown_keys(self):
+        """Test that unknown keys in config file are ignored."""
+        config_data = {
+            "max_extraction_ratio": 50.0,
+            "unknown_key": "should be ignored",
+            "another_unknown": 123,
+        }
 
-        with tempfile.NamedTemporaryFile(mode="r", suffix=".json", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(config_data, f)
             temp_file = f.name
 
         try:
-            config.save(temp_file)
-
-            with open(temp_file, "r") as f:
-                loaded_data = json.load(f)
-
-            assert loaded_data["max_extraction_ratio"] == 75.0
-            assert loaded_data["max_nested_depth"] == 2
-            assert loaded_data["log_level"] == "ERROR"
+            config = Config.from_file(temp_file)
+            assert config.max_extraction_ratio == 50.0
+            assert not hasattr(config, "unknown_key")
         finally:
             os.unlink(temp_file)
-
-    def test_apply_overrides(self):
-        """Test applying command-line overrides."""
-        config = get_default_config()
-
-        config.apply_overrides(
-            max_extraction_ratio=50.0,
-            log_level="DEBUG",
-            preserve_originals=False,
-            non_existent_field="ignored",
-        )
-
-        assert config.max_extraction_ratio == 50.0
-        assert config.log_level == "DEBUG"
-        assert config.preserve_originals is False
 
     def test_load_config_with_overrides(self):
         """Test load_config with file and overrides."""
@@ -120,7 +87,9 @@ class TestConfig:
         try:
             # Load with overrides
             config = load_config(
-                config_file=temp_file, max_extraction_ratio=200.0, log_level="DEBUG"
+                config_file=temp_file,
+                max_extraction_ratio=200.0,
+                log_level="DEBUG"
             )
 
             # Overrides should take precedence
@@ -129,9 +98,32 @@ class TestConfig:
         finally:
             os.unlink(temp_file)
 
+    def test_load_config_ignores_none_overrides(self):
+        """Test that None values in overrides are ignored."""
+        config = load_config(
+            max_extraction_ratio=None,
+            log_level=None,
+            preserve_originals=False,  # This should be applied
+        )
+
+        # Default values should remain
+        assert config.max_extraction_ratio == 100.0
+        assert config.log_level == "INFO"
+        # But explicit False should be applied
+        assert config.preserve_originals is False
+
+    def test_load_config_no_file(self):
+        """Test load_config without a file."""
+        config = load_config(max_extraction_ratio=75.0)
+
+        assert config.max_extraction_ratio == 75.0
+        # Other values should be defaults
+        assert config.max_nested_depth == 3
+
     def test_log_dir_expansion(self):
         """Test log directory path expansion."""
         config = Config(log_dir="~/logs")
 
         # Should be expanded to absolute path
         assert config.log_dir == str(Path("~/logs").expanduser().absolute())
+

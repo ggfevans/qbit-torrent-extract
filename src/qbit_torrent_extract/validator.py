@@ -1,13 +1,12 @@
 """Archive validation and security checks."""
 
-import os
+import re
 import zipfile
 import rarfile
 import tarfile
-import gzip
 import py7zr
 from pathlib import Path
-from typing import Optional, Tuple, List, Dict, Any
+from typing import Optional, Tuple, List
 import logging
 from dataclasses import dataclass
 
@@ -17,15 +16,9 @@ from .config import Config
 @dataclass
 class ValidationResult:
     """Result of archive validation."""
-
     is_valid: bool
     archive_type: Optional[str] = None
     error_message: Optional[str] = None
-    total_size: int = 0
-    compressed_size: int = 0
-    extraction_ratio: float = 0.0
-    nested_depth: int = 0
-    file_count: int = 0
 
 
 class ArchiveValidator:
@@ -38,315 +31,121 @@ class ArchiveValidator:
         ".tar": "tar",
         ".tar.gz": "tar.gz",
         ".tgz": "tar.gz",
-        ".gz": "gz",
     }
 
     def __init__(self, config: Optional[Config] = None):
-        """Initialize validator with configuration.
-
-        Args:
-            config: Configuration object with validation settings
-        """
         self.config = config or Config()
         self.logger = logging.getLogger(__name__)
 
     def validate_archive(self, archive_path: Path) -> ValidationResult:
-        """Validate an archive file.
-
-        Args:
-            archive_path: Path to the archive file
-
-        Returns:
-            ValidationResult with validation details
-        """
+        """Validate an archive file."""
         if not archive_path.exists():
-            return ValidationResult(
-                is_valid=False, error_message=f"Archive not found: {archive_path}"
-            )
+            return ValidationResult(False, error_message=f"Archive not found: {archive_path}")
 
-        # Detect archive type
         archive_type = self.detect_archive_type(archive_path)
         if not archive_type:
-            return ValidationResult(
-                is_valid=False,
-                error_message=f"Unsupported archive type: {archive_path.suffix}",
-            )
+            return ValidationResult(False, error_message=f"Unsupported archive type: {archive_path.suffix}")
 
-        # Validate based on type
         try:
-            if archive_type == "zip":
-                return self._validate_zip(archive_path)
-            elif archive_type == "rar":
-                return self._validate_rar(archive_path)
-            elif archive_type in ("tar", "tar.gz"):
-                return self._validate_tar(archive_path)
-            elif archive_type == "7z":
-                return self._validate_7z(archive_path)
-            else:
-                return ValidationResult(
-                    is_valid=False,
-                    error_message=f"Validation not implemented for {archive_type}",
-                )
-        except Exception as e:
-            self.logger.error(f"Validation error for {archive_path}: {e}")
-            return ValidationResult(
-                is_valid=False, archive_type=archive_type, error_message=str(e)
-            )
+            # Get file sizes for ratio check
+            total_size, compressed_size = self._get_archive_sizes(archive_path, archive_type)
 
-    def detect_archive_type(self, archive_path: Path) -> Optional[str]:
-        """Detect the type of archive from file extension.
-
-        Args:
-            archive_path: Path to the archive file
-
-        Returns:
-            Archive type string or None if unsupported
-        """
-        # Get the full file name in lowercase
-        name_lower = archive_path.name.lower()
-
-        # Check for compound extensions first
-        if name_lower.endswith(".tar.gz") or name_lower.endswith(".tgz"):
-            return "tar.gz"
-
-        # Check single extensions
-        suffix = archive_path.suffix.lower()
-        return self.SUPPORTED_EXTENSIONS.get(suffix)
-
-    def _validate_zip(self, archive_path: Path) -> ValidationResult:
-        """Validate a ZIP archive."""
-        try:
-            with zipfile.ZipFile(archive_path, "r") as zf:
-                # Test archive integrity
-                bad_file = zf.testzip()
-                if bad_file:
+            # Check extraction ratio (zipbomb protection)
+            if compressed_size > 0:
+                ratio = total_size / compressed_size
+                if ratio > self.config.max_extraction_ratio:
                     return ValidationResult(
-                        is_valid=False,
-                        archive_type="zip",
-                        error_message=f"Corrupted file in archive: {bad_file}",
+                        False,
+                        archive_type=archive_type,
+                        error_message=f"Extraction ratio {ratio:.1f} exceeds limit {self.config.max_extraction_ratio}"
                     )
 
-                # Calculate sizes and check for zipbomb
-                total_size = 0
-                compressed_size = 0
-                file_count = 0
+            return ValidationResult(True, archive_type=archive_type)
 
+        except (zipfile.BadZipFile, rarfile.BadRarFile, tarfile.TarError, py7zr.Bad7zFile) as e:
+            return ValidationResult(False, archive_type=archive_type, error_message=f"Invalid {archive_type} file: {e}")
+        except Exception as e:
+            self.logger.error(f"Validation error for {archive_path}: {e}")
+            return ValidationResult(False, archive_type=archive_type, error_message=str(e))
+
+    def _get_archive_sizes(self, archive_path: Path, archive_type: str) -> Tuple[int, int]:
+        """Get total uncompressed and compressed sizes. Returns (total, compressed)."""
+        total_size = 0
+        compressed_size = 0
+
+        if archive_type == "zip":
+            with zipfile.ZipFile(archive_path, "r") as zf:
+                # Also check integrity
+                if zf.testzip():
+                    raise zipfile.BadZipFile("Corrupted archive")
                 for info in zf.infolist():
                     total_size += info.file_size
                     compressed_size += info.compress_size
-                    file_count += 1
 
-                # Calculate extraction ratio
-                extraction_ratio = (
-                    total_size / compressed_size if compressed_size > 0 else 1.0
-                )
-
-                # Check against limits
-                if extraction_ratio > self.config.max_extraction_ratio:
-                    return ValidationResult(
-                        is_valid=False,
-                        archive_type="zip",
-                        error_message=f"Extraction ratio {extraction_ratio:.1f} exceeds limit {self.config.max_extraction_ratio}",
-                        total_size=total_size,
-                        compressed_size=compressed_size,
-                        extraction_ratio=extraction_ratio,
-                        file_count=file_count,
-                    )
-
-                return ValidationResult(
-                    is_valid=True,
-                    archive_type="zip",
-                    total_size=total_size,
-                    compressed_size=compressed_size,
-                    extraction_ratio=extraction_ratio,
-                    file_count=file_count,
-                )
-
-        except zipfile.BadZipFile as e:
-            return ValidationResult(
-                is_valid=False,
-                archive_type="zip",
-                error_message=f"Invalid ZIP file: {e}",
-            )
-
-    def _validate_rar(self, archive_path: Path) -> ValidationResult:
-        """Validate a RAR archive."""
-        try:
+        elif archive_type == "rar":
             with rarfile.RarFile(archive_path, "r") as rf:
-                # Test archive integrity
                 if rf.needs_password():
-                    return ValidationResult(
-                        is_valid=False,
-                        archive_type="rar",
-                        error_message="Password protected archive",
-                    )
-
-                # Calculate sizes
-                total_size = 0
-                compressed_size = 0
-                file_count = 0
-
+                    raise rarfile.BadRarFile("Password protected archive")
                 for info in rf.infolist():
                     total_size += info.file_size
                     compressed_size += info.compress_size
-                    file_count += 1
 
-                # Calculate extraction ratio
-                extraction_ratio = (
-                    total_size / compressed_size if compressed_size > 0 else 1.0
-                )
-
-                # Check against limits
-                if extraction_ratio > self.config.max_extraction_ratio:
-                    return ValidationResult(
-                        is_valid=False,
-                        archive_type="rar",
-                        error_message=f"Extraction ratio {extraction_ratio:.1f} exceeds limit {self.config.max_extraction_ratio}",
-                        total_size=total_size,
-                        compressed_size=compressed_size,
-                        extraction_ratio=extraction_ratio,
-                        file_count=file_count,
-                    )
-
-                return ValidationResult(
-                    is_valid=True,
-                    archive_type="rar",
-                    total_size=total_size,
-                    compressed_size=compressed_size,
-                    extraction_ratio=extraction_ratio,
-                    file_count=file_count,
-                )
-
-        except rarfile.BadRarFile as e:
-            return ValidationResult(
-                is_valid=False,
-                archive_type="rar",
-                error_message=f"Invalid RAR file: {e}",
-            )
-
-    def _validate_tar(self, archive_path: Path) -> ValidationResult:
-        """Validate a TAR archive (including .tar.gz)."""
-        try:
-            # Determine mode based on extension
-            mode = "r:gz" if archive_path.suffix in (".gz", ".tgz") else "r"
-
+        elif archive_type in ("tar", "tar.gz"):
+            mode = "r:gz" if archive_type == "tar.gz" else "r"
             with tarfile.open(archive_path, mode) as tf:
-                # Calculate sizes
-                total_size = 0
-                file_count = 0
-
                 for member in tf.getmembers():
                     if member.isfile():
                         total_size += member.size
-                        file_count += 1
+            compressed_size = archive_path.stat().st_size
 
-                # For tar files, we can't easily get compressed size
-                compressed_size = archive_path.stat().st_size
-                extraction_ratio = (
-                    total_size / compressed_size if compressed_size > 0 else 1.0
-                )
-
-                # Check against limits
-                if extraction_ratio > self.config.max_extraction_ratio:
-                    return ValidationResult(
-                        is_valid=False,
-                        archive_type="tar.gz" if mode == "r:gz" else "tar",
-                        error_message=f"Extraction ratio {extraction_ratio:.1f} exceeds limit {self.config.max_extraction_ratio}",
-                        total_size=total_size,
-                        compressed_size=compressed_size,
-                        extraction_ratio=extraction_ratio,
-                        file_count=file_count,
-                    )
-
-                return ValidationResult(
-                    is_valid=True,
-                    archive_type="tar.gz" if mode == "r:gz" else "tar",
-                    total_size=total_size,
-                    compressed_size=compressed_size,
-                    extraction_ratio=extraction_ratio,
-                    file_count=file_count,
-                )
-
-        except tarfile.TarError as e:
-            return ValidationResult(
-                is_valid=False,
-                archive_type="tar",
-                error_message=f"Invalid TAR file: {e}",
-            )
-
-    def _validate_7z(self, archive_path: Path) -> ValidationResult:
-        """Validate a 7z archive."""
-        try:
+        elif archive_type == "7z":
             with py7zr.SevenZipFile(archive_path, "r") as szf:
-                # Test archive integrity
                 if szf.needs_password():
-                    return ValidationResult(
-                        is_valid=False,
-                        archive_type="7z",
-                        error_message="Password protected archive",
-                    )
-
-                # Get archive info
-                total_size = 0
-                compressed_size = 0
-                file_count = 0
-
-                # Get list of files and their info
-                names = szf.getnames()
-                file_count = len(names)
-
-                # For 7z, we need to check the archive info differently
+                    raise py7zr.Bad7zFile("Password protected archive")
                 for info in szf.list():
                     total_size += info.uncompressed
                     compressed_size += info.compressed
-
-                # If we couldn't get sizes from list, estimate from file size
                 if compressed_size == 0:
                     compressed_size = archive_path.stat().st_size
 
-                # Calculate extraction ratio
-                extraction_ratio = (
-                    total_size / compressed_size if compressed_size > 0 else 1.0
-                )
+        return total_size, compressed_size
 
-                # Check against limits
-                if extraction_ratio > self.config.max_extraction_ratio:
-                    return ValidationResult(
-                        is_valid=False,
-                        archive_type="7z",
-                        error_message=f"Extraction ratio {extraction_ratio:.1f} exceeds limit {self.config.max_extraction_ratio}",
-                        total_size=total_size,
-                        compressed_size=compressed_size,
-                        extraction_ratio=extraction_ratio,
-                        file_count=file_count,
-                    )
+    def detect_archive_type(self, archive_path: Path) -> Optional[str]:
+        """Detect archive type from extension."""
+        name_lower = archive_path.name.lower()
+        if name_lower.endswith(".tar.gz") or name_lower.endswith(".tgz"):
+            return "tar.gz"
+        suffix = archive_path.suffix.lower()
+        return self.SUPPORTED_EXTENSIONS.get(suffix)
 
-                return ValidationResult(
-                    is_valid=True,
-                    archive_type="7z",
-                    total_size=total_size,
-                    compressed_size=compressed_size,
-                    extraction_ratio=extraction_ratio,
-                    file_count=file_count,
-                )
+    def is_split_archive_part(self, archive_path: Path) -> Tuple[bool, bool]:
+        """Check if this is part of a split archive.
 
-        except py7zr.Bad7zFile as e:
-            return ValidationResult(
-                is_valid=False, archive_type="7z", error_message=f"Invalid 7z file: {e}"
-            )
-
-    def check_nested_depth(
-        self, archive_path: Path, current_depth: int = 0
-    ) -> Tuple[bool, int]:
-        """Check if archive contains nested archives within depth limit.
-
-        Args:
-            archive_path: Path to the archive
-            current_depth: Current nesting depth
-
-        Returns:
-            Tuple of (within_limit, max_depth_found)
+        Returns (is_split_part, is_first_part):
+        - (False, True) = not split, safe to extract
+        - (True, True) = split, first part, extract it
+        - (True, False) = split, NOT first part, skip it
         """
+        name = archive_path.name.lower()
+        suffix = archive_path.suffix.lower()
+
+        # .r00, .r01, etc - never first part
+        if re.match(r'^\.r\d+$', suffix):
+            return (True, False)
+
+        # .part2.rar, .part3.rar - not first part
+        match = re.match(r'.*\.part(\d+)\.rar$', name)
+        if match:
+            return (True, int(match.group(1)) == 1)
+
+        # .rar with .r00 sibling = first part of old-style split
+        if suffix == '.rar' and archive_path.with_suffix('.r00').exists():
+            return (True, True)
+
+        return (False, True)
+
+    def check_nested_depth(self, archive_path: Path, current_depth: int = 0) -> Tuple[bool, int]:
+        """Check if archive exceeds nested depth limit."""
         if current_depth >= self.config.max_nested_depth:
             return False, current_depth
 
@@ -354,67 +153,38 @@ class ArchiveValidator:
         if not archive_type:
             return True, current_depth
 
-        max_depth = current_depth
-
         try:
-            # Check for nested archives based on type
-            if archive_type == "zip":
-                with zipfile.ZipFile(archive_path, "r") as zf:
-                    for name in zf.namelist():
-                        if self.detect_archive_type(Path(name)):
-                            # Found nested archive
-                            max_depth = max(max_depth, current_depth + 1)
-                            if max_depth >= self.config.max_nested_depth:
-                                return False, max_depth
-
-            elif archive_type == "rar":
-                with rarfile.RarFile(archive_path, "r") as rf:
-                    for name in rf.namelist():
-                        if self.detect_archive_type(Path(name)):
-                            max_depth = max(max_depth, current_depth + 1)
-                            if max_depth >= self.config.max_nested_depth:
-                                return False, max_depth
-
-            elif archive_type in ("tar", "tar.gz"):
-                mode = "r:gz" if archive_type == "tar.gz" else "r"
-                with tarfile.open(archive_path, mode) as tf:
-                    for member in tf.getmembers():
-                        if member.isfile() and self.detect_archive_type(
-                            Path(member.name)
-                        ):
-                            max_depth = max(max_depth, current_depth + 1)
-                            if max_depth >= self.config.max_nested_depth:
-                                return False, max_depth
-
-            elif archive_type == "7z":
-                with py7zr.SevenZipFile(archive_path, "r") as szf:
-                    for name in szf.getnames():
-                        if self.detect_archive_type(Path(name)):
-                            max_depth = max(max_depth, current_depth + 1)
-                            if max_depth >= self.config.max_nested_depth:
-                                return False, max_depth
-
+            nested_archives = self._get_nested_archive_names(archive_path, archive_type)
+            if nested_archives:
+                depth = current_depth + 1
+                if depth >= self.config.max_nested_depth:
+                    return False, depth
+                return True, depth
         except Exception as e:
             self.logger.warning(f"Error checking nested depth for {archive_path}: {e}")
 
-        return True, max_depth
+        return True, current_depth
 
-    def scan_directory(self, directory: Path) -> Dict[Path, ValidationResult]:
-        """Scan directory for archives and validate them.
+    def _get_nested_archive_names(self, archive_path: Path, archive_type: str) -> List[str]:
+        """Get list of archive files contained within this archive."""
+        nested = []
 
-        Args:
-            directory: Directory to scan
+        if archive_type == "zip":
+            with zipfile.ZipFile(archive_path, "r") as zf:
+                nested = [n for n in zf.namelist() if self.detect_archive_type(Path(n))]
 
-        Returns:
-            Dictionary mapping archive paths to validation results
-        """
-        results = {}
+        elif archive_type == "rar":
+            with rarfile.RarFile(archive_path, "r") as rf:
+                nested = [n for n in rf.namelist() if self.detect_archive_type(Path(n))]
 
-        for ext, archive_type in self.SUPPORTED_EXTENSIONS.items():
-            pattern = f"**/*{ext}"
-            for archive_path in directory.glob(pattern):
-                if archive_path not in results:  # Avoid duplicate checks
-                    self.logger.info(f"Validating {archive_path}")
-                    results[archive_path] = self.validate_archive(archive_path)
+        elif archive_type in ("tar", "tar.gz"):
+            mode = "r:gz" if archive_type == "tar.gz" else "r"
+            with tarfile.open(archive_path, mode) as tf:
+                nested = [m.name for m in tf.getmembers()
+                         if m.isfile() and self.detect_archive_type(Path(m.name))]
 
-        return results
+        elif archive_type == "7z":
+            with py7zr.SevenZipFile(archive_path, "r") as szf:
+                nested = [n for n in szf.getnames() if self.detect_archive_type(Path(n))]
+
+        return nested

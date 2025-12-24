@@ -38,7 +38,7 @@ class TestCLI:
         """Test the --help option."""
         result = self.runner.invoke(main, ["--help"])
         assert result.exit_code == 0
-        assert "Extract nested ZIP and RAR archives" in result.output
+        assert "Extract nested archives" in result.output
         assert "DIRECTORY" in result.output
         assert "--verbose" in result.output
         assert "--preserve" in result.output
@@ -47,7 +47,7 @@ class TestCLI:
         """Test the --version option."""
         result = self.runner.invoke(main, ["--version"])
         assert result.exit_code == 0
-        assert "0.1.0" in result.output
+        assert "0.2.0" in result.output
 
     def test_basic_extraction(self):
         """Test basic archive extraction."""
@@ -70,9 +70,8 @@ class TestCLI:
 
         result = self.runner.invoke(main, [str(self.temp_path), "--verbose"])
         assert result.exit_code == 0
-        assert "Found archives:" in result.output
+        assert "Found" in result.output
         assert "test.zip" in result.output
-        assert "=== Aggregated Statistics ===" in result.output
 
     def test_preserve_option(self):
         """Test archive preservation options."""
@@ -137,37 +136,6 @@ class TestCLI:
         )
         assert result.exit_code == 0
 
-    def test_torrent_name_option(self):
-        """Test torrent name option for logging."""
-        self.create_test_zip("test.zip")
-
-        result = self.runner.invoke(
-            main, [str(self.temp_path), "--torrent-name", "TestTorrent"]
-        )
-        assert result.exit_code == 0
-
-    def test_stats_options(self):
-        """Test statistics-related options."""
-        stats_file = self.temp_path / "stats.json"
-        export_file = self.temp_path / "export.json"
-
-        self.create_test_zip("test.zip")
-
-        result = self.runner.invoke(
-            main,
-            [
-                str(self.temp_path),
-                "--stats-file",
-                str(stats_file),
-                "--show-stats",
-                "--export-stats",
-                str(export_file),
-            ],
-        )
-        assert result.exit_code == 0
-        assert "=== Aggregated Statistics ===" in result.output
-        assert export_file.exists()
-
     def test_nonexistent_directory(self):
         """Test handling of nonexistent directory."""
         result = self.runner.invoke(main, ["/nonexistent/path"])
@@ -188,16 +156,6 @@ class TestCLI:
         result = self.runner.invoke(main, [str(self.temp_path)])
         assert result.exit_code == 1
         assert "Error: Test error" in result.output
-
-    def test_quiet_mode(self):
-        """Test quiet mode output."""
-        self.create_test_zip("test.zip")
-
-        result = self.runner.invoke(main, [str(self.temp_path), "--quiet"])
-        assert result.exit_code == 0
-        # Should have minimal output in quiet mode
-        lines = result.output.strip().split("\n")
-        assert len(lines) <= 2  # Should be very concise
 
 
 class TestCLIIntegration:
@@ -259,36 +217,6 @@ class TestCLIIntegration:
         assert (self.temp_path / "file1.txt").exists()
         assert (self.temp_path / "file2.txt").exists()
         assert "Found 2 archives" in result.output
-
-    def test_full_workflow_with_statistics(self):
-        """Test complete workflow including statistics tracking."""
-        stats_file = self.temp_path / "test_stats.json"
-
-        # Create test archive
-        with zipfile.ZipFile(self.temp_path / "test.zip", "w") as zf:
-            zf.writestr("test.txt", "test content")
-
-        # Run extraction with full options
-        result = self.runner.invoke(
-            main,
-            [
-                str(self.temp_path),
-                "--verbose",
-                "--torrent-name",
-                "TestTorrent",
-                "--stats-file",
-                str(stats_file),
-                "--show-stats",
-            ],
-        )
-
-        assert result.exit_code == 0
-        assert stats_file.exists()
-
-        # Verify statistics were recorded
-        stats_data = json.loads(stats_file.read_text())
-        assert "runs" in stats_data
-        assert len(stats_data["runs"]) > 0
 
     def test_configuration_override_integration(self):
         """Test that CLI options properly override configuration."""
